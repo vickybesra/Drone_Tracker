@@ -1,0 +1,9 @@
+npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/@aedes%2fcli - Not found
+npm error 404
+npm error 404  '@aedes/cli@*' is not in this registry.
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+
+npm error A complete log of this run can be found in: /Users/vickybesra/.npm/_logs/2025-11-10T08_24_52_076Z-debug-0.log

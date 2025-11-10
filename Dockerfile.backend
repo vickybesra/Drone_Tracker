@@ -1,0 +1,23 @@
+# Dockerfile.backend
+FROM node:20-alpine AS base
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Install only production dependencies
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Copy backend entrypoint
+COPY server.js ./
+
+# Expose backend port
+EXPOSE 8080
+
+# Default environment variables (override in compose or env)
+ENV PORT=8080 \
+    MQTT_BROKER_URL=mqtt://mqtt:1883 \
+    MQTT_USERNAME= \
+    MQTT_PASSWORD= \
+    DATABASE_URL=
+
+CMD ["node", "server.js"]

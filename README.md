@@ -1,70 +1,87 @@
-# Getting Started with Create React App
+# Tractor Tracker — Local Development Guide
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This app tracks vehicle positions and paths in real-time:
+- Backend: Node/Express + Socket.IO + Firebase Admin + MQTT
+- Frontend: React + React-Leaflet
+- Data: Firebase Realtime Database (RTDB)
 
-## Available Scripts
+## Prerequisites
+- Node.js (>= 18) and npm
+- A Firebase project with Realtime Database enabled
+- Admin SDK key saved as `serviceAccountKey.json` in the project root
+- An MQTT broker reachable at `mqtt://localhost:1883`
 
-In the project directory, you can run:
+> Note: The backend reads RTDB URL from `server.js`. Ensure it matches your project.
 
-### `npm start`
+## 1) Install dependencies
+```bash
+npm install
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:](http://localhost:) to view it in your browser.
+## 2) Start an MQTT broker (local)
+You can run a local broker using Aedes CLI:
+```bash
+npx @aedes/cli -p 1883
+```
+Keep it running in a separate terminal. Alternatively, use Mosquitto (brew or docker).
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## 3) Start the backend (Socket.IO + Firebase)
+```bash
+npm run server
+```
+- URL: `http://localhost:8080`
+- Subscribes to: `tractor/gps`
+- Writes to RTDB at: `tractor/gps/{vehicleId}` with:
+  - `current`: `{ latitude, longitude, timestamp }`
+  - `path`: array of points (kept to the latest 500)
 
-### `npm test`
+## 4) Start the frontend (React)
+```bash
+npm start
+```
+- URL: `http://localhost:3000`
+- Connects to Socket.IO on `http://localhost:8080`
+- Displays vehicle markers and paths on the map
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 5) Publish a test GPS message
+Use any MQTT client. Examples:
 
-### `npm run build`
+Node one-liner:
+```bash
+node -e "const m=require('mqtt');const c=m.connect('mqtt://localhost:1883',{username:'myuser',password:'1234'});c.on('connect',()=>{const msg=JSON.stringify({vehicleId:'vehicle1',latitude:22.573,longitude:88.364,timestamp:Date.now()});c.publish('tractor/gps', msg, {}, ()=>c.end());});setTimeout(()=>process.exit(0),1500);"
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Mosquitto:
+```bash
+mosquitto_pub -h localhost -t tractor/gps -m '{"vehicleId":"vehicle1","latitude":22.573,"longitude":88.364,"timestamp":1731234567890}'
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## 6) Verify it works
+- Frontend shows a "Connected" badge and a tractor marker
+- Firebase RTDB updates at `tractor/gps/vehicle1/current` and `tractor/gps/vehicle1/path`
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Scripts
+- `npm start` — start React dev server (frontend)
+- `npm run server` — start Node backend (`server.js`)
+- `npm run build` — production build for frontend
+- `npm test` — run CRA tests
 
-### `npm run eject`
+## Troubleshooting
+- Firebase Admin "invalid_grant: Invalid JWT Signature"
+  - Ensure `serviceAccountKey.json` is valid (new key from Firebase console)
+  - Keep PEM line breaks intact; confirm the correct `databaseURL` in `server.js`
+- No marker on the map
+  - Make sure GPS messages are being published to `tractor/gps`
+  - The app auto recenters to the latest vehicle — send a new point if needed
+  - Confirm the marker icon is served: `http://localhost:3000/images/tractor_2548747.png`
+- Port conflicts
+  - Frontend: 3000; Backend: 8080; MQTT: 1883 — stop other processes or change ports
+- MQTT auth
+  - The sample uses `{ username: "myuser", password: "1234" }` in code, but Aedes accepts by default; adjust if your broker enforces auth
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## Data model (RTDB)
+```
+tractor/gps/{vehicleId}/
+  current: { latitude: number, longitude: number, timestamp: number }
+  path: Array<{ latitude: number, longitude: number, timestamp: number }>
+```

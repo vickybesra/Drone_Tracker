@@ -8,14 +8,16 @@ const mqtt = require('mqtt');
 const serviceAccount = require("./serviceAccountKey.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://tractortracker-6e60d-default-rtdb.firebaseio.com"
+  databaseURL: process.env.DATABASE_URL || "https://tractortracker-6e60d-default-rtdb.firebaseio.com"
 });
 
 const db = admin.database();
 
 // MQTT setup
-const mqttBrokerUrl = "mqtt://localhost:1883";
-const mqttOptions = { username: "myuser", password: "1234" };
+const mqttBrokerUrl = process.env.MQTT_BROKER_URL || "mqtt://localhost:1883";
+const mqttOptions = {};
+if (process.env.MQTT_USERNAME) mqttOptions.username = process.env.MQTT_USERNAME;
+if (process.env.MQTT_PASSWORD) mqttOptions.password = process.env.MQTT_PASSWORD;
 const mqttClient = mqtt.connect(mqttBrokerUrl, mqttOptions);
 
 mqttClient.on("connect", function () {
@@ -31,43 +33,51 @@ mqttClient.on("connect", function () {
 
 // Process incoming MQTT messages
 mqttClient.on("message", function (topic, message) {
-  console.log(`Received message on ${topic}: ${message.toString()}`);
+  // Only process expected topic(s)
+  if (topic !== "tractor/gps") return;
+
+  const raw = message.toString();
+  console.log(`Received message on ${topic}: ${raw}`);
+
   try {
-    const gpsData = JSON.parse(message.toString());
-    const timestamp = Date.now();
-    
-    // Update current position with consistent structure
-    db.ref(`tractor/gps/vehicle1/current`).set({
-      latitude: gpsData.latitude,
-      longitude: gpsData.longitude,
-      timestamp: timestamp
-    });
-    
-    // Get and update path array
-    db.ref(`tractor/gps/vehicle1/path`).once("value", (snapshot) => {
-      let pathArray = [];
-      
-      if (snapshot.exists()) {
-        const pathData = snapshot.val();
-        if (Array.isArray(pathData)) {
-          pathArray = pathData;
-        }
+    const gpsData = JSON.parse(raw);
+
+    // Validate and normalize input
+    const latitude = Number(gpsData.latitude);
+    const longitude = Number(gpsData.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      console.warn("Ignoring GPS update with non-numeric lat/lon", gpsData);
+      return;
+    }
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      console.warn("Ignoring GPS update with out-of-range lat/lon", { latitude, longitude });
+      return;
+    }
+
+    const timestamp = typeof gpsData.timestamp === 'number' && Number.isFinite(gpsData.timestamp)
+      ? gpsData.timestamp
+      : Date.now();
+
+    const vehicleId = (gpsData.vehicleId && String(gpsData.vehicleId)) || "vehicle1";
+    const baseRef = db.ref(`tractor/gps/${vehicleId}`);
+
+    // Update current position (last known)
+    baseRef.child("current").set({ latitude, longitude, timestamp });
+
+    // Atomically append to path and trim to last 500 points
+    const point = { latitude, longitude, timestamp };
+    const pathRef = baseRef.child("path");
+    pathRef.transaction((current) => {
+      let arr = Array.isArray(current) ? current : [];
+      arr = arr.concat(point);
+      if (arr.length > 500) arr = arr.slice(-500);
+      return arr;
+    }, (error, committed) => {
+      if (error) {
+        console.error("Path transaction failed:", error);
+      } else if (!committed) {
+        console.warn("Path transaction not committed");
       }
-      
-      // Add new position to path
-      pathArray.push({
-        latitude: gpsData.latitude,
-        longitude: gpsData.longitude,
-        timestamp: timestamp
-      });
-      
-      // Limit path length to 500 points
-      if (pathArray.length > 500) {
-        pathArray = pathArray.slice(-500);
-      }
-      
-      // Save updated path
-      db.ref(`tractor/gps/vehicle1/path`).set(pathArray);
     });
   } catch (error) {
     console.error("Error parsing MQTT message:", error);

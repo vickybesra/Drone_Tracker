@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import io from 'socket.io-client';
 import 'leaflet/dist/leaflet.css';
@@ -43,6 +43,7 @@ const initialVehicles = {
 function VehicleTracker() {
   const [vehicles, setVehicles] = useState(initialVehicles);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [focusPos, setFocusPos] = useState([22.317094, 87.314139]);
   const socketRef = useRef(null);
   
   useEffect(() => {
@@ -77,9 +78,13 @@ function VehicleTracker() {
         setVehicles(prevVehicles => {
           const newVehicles = { ...prevVehicles };
           
-          // Process vehicle data
+          // Process vehicle-like entries only (objects with current/path)
           Object.keys(data).forEach(vehicleId => {
-            if (!data[vehicleId]) return;
+            const entry = data[vehicleId];
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return;
+            const hasCurrent = entry.current && (entry.current.latitude != null) && (entry.current.longitude != null);
+            const hasPath = Array.isArray(entry.path);
+            if (!hasCurrent && !hasPath) return;
             
             // Initialize vehicle if not exists
             if (!newVehicles[vehicleId]) {
@@ -93,18 +98,17 @@ function VehicleTracker() {
             }
             
             // Update current position
-            const vehicle = data[vehicleId];
-            if (vehicle.current && vehicle.current.latitude && vehicle.current.longitude) {
+            if (hasCurrent) {
               newVehicles[vehicleId].currentPosition = {
-                lat: parseFloat(vehicle.current.latitude),
-                lng: parseFloat(vehicle.current.longitude)
+                lat: parseFloat(entry.current.latitude),
+                lng: parseFloat(entry.current.longitude)
               };
-              newVehicles[vehicleId].lastUpdateTime = vehicle.current.timestamp || Date.now();
+              newVehicles[vehicleId].lastUpdateTime = entry.current.timestamp || Date.now();
             }
             
             // Update path if available
-            if (vehicle.path && Array.isArray(vehicle.path)) {
-              newVehicles[vehicleId].path = vehicle.path.map(point => ({
+            if (hasPath) {
+              newVehicles[vehicleId].path = entry.path.map(point => ({
                 lat: parseFloat(point.latitude),
                 lng: parseFloat(point.longitude),
                 timestamp: point.timestamp || Date.now()
@@ -114,6 +118,16 @@ function VehicleTracker() {
           
           return newVehicles;
         });
+
+        // Recenter on the primary vehicle (vehicle1) or the first available
+        const focusEntry = data.vehicle1 && data.vehicle1.current
+          ? data.vehicle1
+          : Object.values(data).find(v => v && typeof v === 'object' && v.current && v.current.latitude != null && v.current.longitude != null);
+        if (focusEntry && focusEntry.current) {
+          const lat = parseFloat(focusEntry.current.latitude);
+          const lng = parseFloat(focusEntry.current.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) setFocusPos([lat, lng]);
+        }
       });
     }
     
@@ -143,7 +157,7 @@ function VehicleTracker() {
       </div>
       
       <MapContainer 
-        center={[22.317094, 87.314139]} 
+        center={focusPos} 
         zoom={15} 
         style={{ height: '100%', width: '100%' }}
       >
@@ -151,6 +165,7 @@ function VehicleTracker() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
+        <RecenterOnPosition position={focusPos} />
         
         {Object.keys(vehicles).map(id => {
           const vehicle = vehicles[id];
@@ -193,6 +208,17 @@ function VehicleTracker() {
       </MapContainer>
     </div>
   );
+}
+
+// Helper to recenter the map when position changes
+function RecenterOnPosition({ position }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position && Array.isArray(position) && position.length === 2) {
+      map.setView(position);
+    }
+  }, [map, position]);
+  return null;
 }
 
 export default VehicleTracker;
