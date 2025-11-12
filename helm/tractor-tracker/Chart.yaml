@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tractor-tracker
+description: Helm chart for tractor-tracker backend (Node) with MQTT broker (Mosquitto)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

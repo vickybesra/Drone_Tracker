@@ -1,0 +1,26 @@
+{{- if .Values.mqtt.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mqtt
+  labels:
+    app.kubernetes.io/name: mqtt
+    app.kubernetes.io/part-of: tractor-tracker
+spec:
+  replicas: {{ .Values.mqtt.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mqtt
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mqtt
+    spec:
+      containers:
+        - name: mosquitto
+          image: {{ .Values.mqtt.image | quote }}
+          ports:
+            - containerPort: {{ .Values.mqtt.service.port }}
+          securityContext: {{- toYaml .Values.mqtt.securityContext | nindent 12 }}
+          resources: {{- toYaml .Values.mqtt.resources | nindent 12 }}
+{{- end }}

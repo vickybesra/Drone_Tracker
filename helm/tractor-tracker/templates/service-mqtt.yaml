@@ -1,0 +1,16 @@
+{{- if .Values.mqtt.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqtt
+  labels:
+    app.kubernetes.io/name: mqtt
+    app.kubernetes.io/part-of: tractor-tracker
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mqtt
+  ports:
+    - port: {{ .Values.mqtt.service.port }}
+      targetPort: {{ .Values.mqtt.service.port }}
+{{- end }}

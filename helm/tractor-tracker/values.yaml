@@ -1,0 +1,71 @@
+backend:
+  image:
+    repository: "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/tractor-tracker-backend"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    port: 8080
+    mqttBrokerUrl: "mqtt://mqtt:1883"
+  # Kubernetes Secret that holds sensitive app variables (create before deploy)
+  # kubectl -n <ns> create secret generic app-secrets \
+  #   --from-literal=MQTT_USERNAME=... \
+  #   --from-literal=MQTT_PASSWORD=... \
+  #   --from-literal=DATABASE_URL=...
+  secrets:
+    enabled: true
+    name: "app-secrets"
+    keys:
+      mqttUsername: "myuser"
+      mqttPassword: "1234"
+      databaseUrl: "DATABASE_URL"
+
+  firebaseSecretName: "firebase-sa"
+  podSecurityContext:
+    runAsNonRoot: true
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+mqtt:
+  enabled: true
+  image: "eclipse-mosquitto:2"
+  replicaCount: 1
+  service:
+    port: 1883
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+  hosts: []
+  paths:
+    - path: /
+      pathType: Prefix

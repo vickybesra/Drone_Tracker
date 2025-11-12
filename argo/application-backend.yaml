@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tractor-tracker-backend
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/REPLACE_ME/tractor-tracker-backend.git"
+    targetRevision: main
+    path: helm/tractor-tracker
+    helm:
+      values: |
+        backend:
+          image:
+            repository: "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/tractor-tracker-backend"
+            tag: "latest"
+          firebaseSecretName: "firebase-sa"
+        mqtt:
+          enabled: true
+        ingress:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tractor
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

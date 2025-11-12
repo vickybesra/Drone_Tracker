@@ -18,32 +18,59 @@ This app tracks vehicle positions and paths in real-time:
 npm install
 ```
 
-## 2) Start an MQTT broker (local)
-You can run a local broker using Aedes CLI:
+## 2) Setup frontend files
+Copy the frontend files to the root directory so React can find them:
 ```bash
-npx @aedes/cli -p 1883
+cp -r frontend/public frontend/src .
 ```
-Keep it running in a separate terminal. Alternatively, use Mosquitto (brew or docker).
 
-## 3) Start the backend (Socket.IO + Firebase)
+## 3) Start an MQTT broker (local)
+Use Mosquitto (recommended) - install via Homebrew if needed:
 ```bash
-npm run server
+brew install mosquitto
 ```
+
+Start the broker:
+```bash
+mosquitto -p 1883 > .mqtt.log 2>&1 & echo $! > .mqtt.pid
+```
+
+Alternatively, use Docker:
+```bash
+docker run -d -p 1883:1883 eclipse-mosquitto
+```
+
+## 4) Start the backend (Socket.IO + Firebase)
+```bash
+node server.js > .server.log 2>&1 & echo $! > .server.pid
+```
+
+Or run in foreground:
+```bash
+node server.js
+```
+
 - URL: `http://localhost:8080`
 - Subscribes to: `tractor/gps`
 - Writes to RTDB at: `tractor/gps/{vehicleId}` with:
   - `current`: `{ latitude, longitude, timestamp }`
   - `path`: array of points (kept to the latest 500)
 
-## 4) Start the frontend (React)
+## 5) Start the frontend (React)
 ```bash
-npm start
+PORT=3000 BROWSER=none npx react-scripts start > .frontend.log 2>&1 & echo $! > .frontend.pid
 ```
+
+Or run in foreground:
+```bash
+PORT=3000 npx react-scripts start
+```
+
 - URL: `http://localhost:3000`
 - Connects to Socket.IO on `http://localhost:8080`
 - Displays vehicle markers and paths on the map
 
-## 5) Publish a test GPS message
+## 6) Publish a test GPS message
 Use any MQTT client. Examples:
 
 Node one-liner:
@@ -56,13 +83,32 @@ Mosquitto:
 mosquitto_pub -h localhost -t tractor/gps -m '{"vehicleId":"vehicle1","latitude":22.573,"longitude":88.364,"timestamp":1731234567890}'
 ```
 
-## 6) Verify it works
+## 7) Verify it works
 - Frontend shows a "Connected" badge and a tractor marker
 - Firebase RTDB updates at `tractor/gps/vehicle1/current` and `tractor/gps/vehicle1/path`
 
+## Managing Background Processes
+
+Stop all services:
+```bash
+kill $(cat .mqtt.pid .server.pid .frontend.pid 2>/dev/null) 2>/dev/null
+```
+
+Check service status:
+```bash
+lsof -i :1883,8080,3000 | grep LISTEN
+```
+
+View logs:
+```bash
+tail -f .mqtt.log    # MQTT broker logs
+tail -f .server.log  # Backend logs
+tail -f .frontend.log # Frontend logs
+```
+
 ## Scripts
-- `npm start` — start React dev server (frontend)
-- `npm run server` — start Node backend (`server.js`)
+- `node server.js` — start Node backend (`server.js`)
+- `PORT=3000 npx react-scripts start` — start React dev server (frontend)
 - `npm run build` — production build for frontend
 - `npm test` — run CRA tests
 

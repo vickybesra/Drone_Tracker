@@ -5,8 +5,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci && npm cache clean --force
 
-# Copy full project (CRA will build from src/)
-COPY . .
+# Copy frontend sources from root (not under ./frontend)
+COPY public ./public
+COPY src ./src
 
 # Build static assets
 RUN npm run build
@@ -14,5 +15,9 @@ RUN npm run build
 # Serve with nginx
 FROM nginx:alpine
 COPY --from=build /app/build /usr/share/nginx/html
+
+# Copy nginx config for SPA routing (optional but recommended)
+#COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

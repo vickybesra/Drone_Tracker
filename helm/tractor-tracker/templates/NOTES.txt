@@ -1,0 +1,18 @@
+1. Create secrets (before first install):
+   kubectl -n tractor create secret generic firebase-sa \
+     --from-file=serviceAccountKey.json=serviceAccountKey.json
+   kubectl -n tractor create secret generic app-secrets \
+     --from-literal=MQTT_USERNAME=... --from-literal=MQTT_PASSWORD=... \
+     --from-literal=DATABASE_URL='postgres://user:pass@host:5432/db'
+
+2. Install/upgrade:
+   helm upgrade --install tractor-tracker ./helm/tractor-tracker \
+     --namespace tractor --create-namespace \
+     --set backend.image.repository=<ACCOUNT>.dkr.ecr.<REGION>.amazonaws.com/tractor-tracker-backend \
+     --set backend.image.tag=<TAG>
+
+3. Get the Ingress address:
+   kubectl get ingress backend -n tractor -o wide
+
+4. Backend Service:
+   kubectl get svc backend -n tractor

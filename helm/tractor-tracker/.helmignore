@@ -1,0 +1,7 @@
+# Patterns to ignore when packaging
+.git/
+.github/
+ci/
+Dockerfile*
+README.md
+*.tgz
